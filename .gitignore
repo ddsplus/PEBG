@@ -129,3 +129,7 @@ dmypy.json
 .pyre/
 assist09/
 ednet/
+Data/ASSIST2009/
+Data/ASSIST2017/
+Data/Statics2011/
+Data/XES3G5M/

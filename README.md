@@ -1,92 +1,247 @@
-# PEBG
+# PEBG (PyTorch, Multi-Dataset Refactor)
 
-This repository contains the source code of the mdoel PEBG in our paper "Improving Knowledge Tracing via Pre-training Question Embeddings", which is accepted by IJCAI 2020.
+本仓库已重构为 **PyTorch 版本**，并统一适配以下 4 个数据集：
+- `ASSIST2009`
+- `ASSIST2017`
+- `STATICS2011`
+- `XES3G5M`
 
-## Data Preparation
-### Assist09
-- data_assist09.py: Data pre-process. You should download original assist09 dataset from [here](https://drive.google.com/file/d/1NNXHFRxcArrU0ZJSb9BIL56vmUt5FhlE/view). Details are [here](https://sites.google.com/site/assistmentsdata/home/assistment-2009-2010-data/skill-builder-data-2009-2010).
+核心思路：
+1. 先用各数据集预处理脚本生成统一中间格式（`train/test_question.txt`、`ques_skill.csv`）。
+2. 再用仓库内统一转换脚本 `prepare_dataset.py` 构建 PEBG 训练输入。
+3. 训练 `PEBG` 预训练模型，再训练 `PEBG+DKT`。
 
-### EdNet
-- ednet/data.py: Data pre-process for EdNet dataset. 
-we use the 'ednet-kt1' dataset. You can download it [here](https://drive.google.com/file/d/1AmGcOs5U31wIIqvthn9ARqJMrMTFTcaw/view). The question information file is [here](https://drive.google.com/file/d/117aYJAWG3GU48suS66NPaB82HwFj6xWS/view). For more information about [EdNet](https://github.com/riiid/ednet)
+---
 
-Once you have the ednet-kt1 dataset, you can enter the folder "ednet" and run 'data.py' to pre-process EdNet dataset.
+## 1. Environment
 
-
-## Model Code
-- extract.py: Extract the implicit similarity between questions and skills.
-- PNN.py: Implement the product layer.
-- pebg.py: The PEBG model.
-- pebg_dkt.py: The PEBG+DKT model. 
-
-## Runtime Dependencies
-- Python 3.8+
+推荐环境：
+- Python `3.8+`
 - PyTorch
 - NumPy
 - SciPy
+- pandas
 - scikit-learn
 - tqdm
 
-## How To Train
-The project now uses PyTorch.
+安装示例：
 
-### 1) Prepare Data
-1. Prepare Assist09 or EdNet raw data as described above.
-2. Run preprocessing scripts:
-- Assist09: `python data_assist09.py`
-- EdNet: `python ednet/data.py`
-3. Build graph relation files (problem-skill / problem-problem / skill-skill):
-- `python extract.py`
+```bash
+pip install torch numpy scipy pandas scikit-learn tqdm
+```
 
-After this step, the dataset folder (for example `assist09/` or `ednet/`) should contain files like:
-- `<dataset>.npz`
-- `pro_feat.npz`
+---
+
+## 2. Repository Layout
+
+关键文件：
+- `prepare_dataset.py`: 将统一中间格式转成 PEBG 输入文件
+- `extract.py`: 从 `pro_skill_sparse.npz` 构建 `pro_pro`/`skill_skill` 图
+- `pebg.py`: PEBG 预训练
+- `pebg_dkt.py`: PEBG+DKT 训练
+- `Data/preprocess_*.py`: 4 个数据集的预处理脚本（用于产出统一中间格式）
+
+---
+
+## 3. Data Pipeline (Unified)
+
+### Step A: 运行数据集预处理脚本
+
+在 `Data/` 目录下，按数据集选择脚本：
+
+```bash
+python Data/preprocess_assist09.py
+python Data/preprocess_assist17.py
+python Data/preprocess_statics2011.py
+python Data/preprocess_xes3g5m.py
+```
+
+这些脚本会输出统一中间文件（路径依脚本而定），至少应包含：
+- `train_question.txt`
+- `test_question.txt`
+- `train_skill.txt`
+- `test_skill.txt`
+- `ques_skill.csv`
+
+### Step B: 转换为 PEBG 训练输入
+
+使用 `prepare_dataset.py`：
+
+```bash
+python prepare_dataset.py \
+  --input-dir <中间文件目录> \
+  --output-dir <PEBG数据目录> \
+  --dataset-name <数据集名>
+```
+
+示例（ASSIST2017）：
+
+```bash
+python prepare_dataset.py --input-dir Data/data/ASSIST17 --output-dir datasets/assist17 --dataset-name assist17
+```
+
+转换后将得到：
+- `<dataset-name>.npz`
 - `pro_skill_sparse.npz`
-- `pro_pro_sparse.npz`
-- `skill_skill_sparse.npz`
+- `pro_feat.npz`
 - `skill_id_dict.txt`
 
-### 2) Train PEBG (Question Embedding Pretraining)
-Run:
+### Step C: 构建图相似矩阵
 
 ```bash
-python pebg.py
+python extract.py --data-dir datasets/assist17
 ```
 
-Notes:
-- Set `data_folder` in `pebg.py` (default is `ednet`).
-- This step saves pretrained embeddings to:
-- `<data_folder>/embedding_200.npz`
-- Model checkpoints are saved to:
-- `<data_folder>/pebg_model/pebg_*.pt`
+会新增：
+- `pro_pro_sparse.npz`
+- `skill_skill_sparse.npz`
 
-### 3) Train PEBG+DKT
-Run:
+---
+
+## 4. Training
+
+### 4.1 训练 PEBG 预训练模型
 
 ```bash
-python pebg_dkt.py
+python pebg.py --data-dir datasets/assist17 --epochs 200
 ```
 
-Notes:
-- Set `data_folder` in `pebg_dkt.py` (default is `assist09`).
-- The script loads pretrained embedding from:
-- `<data_folder>/embedding_200.npz`
-- During training, it prints test AUC and ACC each epoch.
+输出：
+- `datasets/assist17/embedding_200.npz`
+- `datasets/assist17/pebg_model/pebg_*.pt`
 
-### 4) Recommended Training Order
-1. Preprocess data (`data_assist09.py` or `ednet/data.py`)
-2. Build relation graph (`extract.py`)
-3. Pretrain embeddings (`pebg.py`)
-4. Train KT model (`pebg_dkt.py`)
+### 4.2 训练 PEBG+DKT
 
-### 5) Quick Configuration Tips
-- In `pebg.py`:
-- `epochs`, `bs`, `lr`, `embed_dim`, `hidden_dim`, `data_folder`
-- In `pebg_dkt.py`:
-- `epochs`, `bs`, `lr`, `hidden_dim`, `data_folder`, `use_pretrain`, `train_embed`
-- For faster debug, reduce `epochs` first (for example 5-10).
+```bash
+python pebg_dkt.py \
+  --data-dir datasets/assist17 \
+  --dataset-name assist17 \
+  --use-pretrain \
+  --embedding-file embedding_200.npz \
+  --epochs 200
+```
 
+训练过程中会打印每个 epoch 的：
+- `train loss`
+- `test auc`
+- `test acc`
 
+---
 
-If you need more information about our experiments, you can contact us. 
-email: liuyunfei@sjtu.edu.cn
+## 5. End-to-End Commands (4 Datasets)
+
+下面只需要替换输入目录和输出目录即可。
+
+### ASSIST2009
+
+```bash
+python Data/preprocess_assist09.py
+python prepare_dataset.py --input-dir Data/data/ASSIST09 --output-dir datasets/assist09 --dataset-name assist09
+python extract.py --data-dir datasets/assist09
+python pebg.py --data-dir datasets/assist09 --epochs 200
+python pebg_dkt.py --data-dir datasets/assist09 --dataset-name assist09 --use-pretrain --embedding-file embedding_200.npz --epochs 200
+```
+
+### ASSIST2017
+
+```bash
+python Data/preprocess_assist17.py
+python prepare_dataset.py --input-dir Data/data/ASSIST17 --output-dir datasets/assist17 --dataset-name assist17
+python extract.py --data-dir datasets/assist17
+python pebg.py --data-dir datasets/assist17 --epochs 200
+python pebg_dkt.py --data-dir datasets/assist17 --dataset-name assist17 --use-pretrain --embedding-file embedding_200.npz --epochs 200
+```
+
+### STATICS2011
+
+```bash
+python Data/preprocess_statics2011.py
+python prepare_dataset.py --input-dir Data/data/STATICS2011 --output-dir datasets/statics2011 --dataset-name statics2011
+python extract.py --data-dir datasets/statics2011
+python pebg.py --data-dir datasets/statics2011 --epochs 200
+python pebg_dkt.py --data-dir datasets/statics2011 --dataset-name statics2011 --use-pretrain --embedding-file embedding_200.npz --epochs 200
+```
+
+### XES3G5M
+
+```bash
+python Data/preprocess_xes3g5m.py
+python prepare_dataset.py --input-dir Data/data/XES3G5M --output-dir datasets/xes3g5m --dataset-name xes3g5m
+python extract.py --data-dir datasets/xes3g5m
+python pebg.py --data-dir datasets/xes3g5m --epochs 200
+python pebg_dkt.py --data-dir datasets/xes3g5m --dataset-name xes3g5m --use-pretrain --embedding-file embedding_200.npz --epochs 200
+```
+
+---
+
+## 6. Key Arguments
+
+### `prepare_dataset.py`
+- `--input-dir`: 中间文件目录（必须有 `train/test_question.txt` + `ques_skill.csv`）
+- `--output-dir`: PEBG 数据输出目录
+- `--dataset-name`: 输出的 `<dataset-name>.npz` 名称
+- `--max-len`: 序列最大长度，默认 `200`
+- `--min-len`: 最小序列长度，默认 `3`
+- `--split`: `all` 或 `train`，默认 `all`
+
+### `extract.py`
+- `--data-dir`: 包含 `pro_skill_sparse.npz` 的目录
+
+### `pebg.py`
+- `--data-dir`
+- `--epochs`
+- `--batch-size`
+- `--embed-dim`
+- `--hidden-dim`
+- `--keep-prob`
+- `--lr`
+- `--resume-epoch`
+
+### `pebg_dkt.py`
+- `--data-dir`
+- `--dataset-name`
+- `--use-pretrain`
+- `--embedding-file`
+- `--epochs`
+- `--batch-size`
+- `--hidden-dim`
+- `--lr`
+- `--train-embed`
+
+---
+
+## 7. Sanity Check
+
+建议在正式训练前先做一次快速验证（小 epoch）：
+
+```bash
+python pebg.py --data-dir datasets/assist17 --epochs 2
+python pebg_dkt.py --data-dir datasets/assist17 --dataset-name assist17 --use-pretrain --embedding-file embedding_2.npz --epochs 2
+```
+
+如果你把 `pebg.py` 的 epoch 设为 `2`，会产出 `embedding_2.npz`，DKT 要对应加载它。
+
+---
+
+## 8. Common Issues
+
+1. 报错找不到 `pro_pro_sparse.npz` 或 `skill_skill_sparse.npz`
+- 原因：未运行 `extract.py`
+- 处理：先执行 `python extract.py --data-dir <dir>`
+
+2. 报错找不到 `embedding_200.npz`
+- 原因：未先训练 `pebg.py` 或 epoch 不一致
+- 处理：检查 `pebg.py` 输出文件名，并在 `pebg_dkt.py` 用 `--embedding-file` 对齐
+
+3. `ques_skill.csv` 列名不匹配
+- 需要列名严格为：`problem_id,skill_id`
+
+4. GPU 不可用
+- 代码会自动回落到 CPU，训练会慢很多
+
+---
+
+## 9. Notes
+
+- `Data/preprocess_*.py` 的内部逻辑不要求一致；本仓库只依赖它们的统一输出格式。
+- 当前模型代码已经去除对特定数据集名称（如仅 `assist09`）的硬编码，切换数据集只需更换目录参数。

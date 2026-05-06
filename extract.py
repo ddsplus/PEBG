@@ -1,49 +1,68 @@
+import argparse
 import os
-import sys
 import numpy as np
 from scipy import sparse
-import time
 
 
-data_folder = 'assist09'
-pro_skill_coo = sparse.load_npz(os.path.join(data_folder, 'pro_skill_sparse.npz'))
-[pro_num, skill_num] = pro_skill_coo.toarray().shape
-print('problem number %d, skill number %d' % (pro_num, skill_num))
-pro_skill_csc = pro_skill_coo.tocsc()
-pro_skill_csr = pro_skill_coo.tocsr()
+def extract_pro_pro_sim(pro_skill_coo):
+    pro_num, skill_num = pro_skill_coo.shape
+    pro_skill_csc = pro_skill_coo.tocsc()
+    pro_skill_csr = pro_skill_coo.tocsr()
 
-
-def extract_pro_pro_sim():
-    # extract pro-pro similarity sparse matrix
     pro_pro_adj = []
     for p in range(pro_num):
         tmp_skills = pro_skill_csr.getrow(p).indices
+        if tmp_skills.size == 0:
+            continue
         similar_pros = pro_skill_csc[:, tmp_skills].indices
-        zipped = zip([p] * similar_pros.shape[0], similar_pros)
-        pro_pro_adj += list(zipped)
+        pro_pro_adj.extend(zip([p] * similar_pros.shape[0], similar_pros))
 
-    pro_pro_adj = list(set(pro_pro_adj))
-    pro_pro_adj = np.array(pro_pro_adj).astype(np.int32)
-    data = np.ones(pro_pro_adj.shape[0]).astype(np.float32)
-    pro_pro_sparse = sparse.coo_matrix((data, (pro_pro_adj[:, 0], pro_pro_adj[:, 1])), shape=(pro_num, pro_num))
-    sparse.save_npz(os.path.join(data_folder, 'pro_pro_sparse.npz'), pro_pro_sparse)
+    if len(pro_pro_adj) == 0:
+        return sparse.coo_matrix((pro_num, pro_num), dtype=np.float32)
+
+    pro_pro_adj = np.array(list(set(pro_pro_adj)), dtype=np.int32)
+    data = np.ones(pro_pro_adj.shape[0], dtype=np.float32)
+    return sparse.coo_matrix((data, (pro_pro_adj[:, 0], pro_pro_adj[:, 1])), shape=(pro_num, pro_num))
 
 
-def extract_skill_skill_sim():
-    # extract skill-skill similarity sparse matrix
+def extract_skill_skill_sim(pro_skill_coo):
+    pro_num, skill_num = pro_skill_coo.shape
+    pro_skill_csc = pro_skill_coo.tocsc()
+    pro_skill_csr = pro_skill_coo.tocsr()
+
     skill_skill_adj = []
     for s in range(skill_num):
         tmp_pros = pro_skill_csc.getcol(s).indices
+        if tmp_pros.size == 0:
+            continue
         similar_skills = pro_skill_csr[tmp_pros, :].indices
-        zipped = zip([s] * similar_skills.shape[0], similar_skills)
-        skill_skill_adj += list(zipped)
+        skill_skill_adj.extend(zip([s] * similar_skills.shape[0], similar_skills))
 
-    skill_skill_adj = list(set(skill_skill_adj))
-    skill_skill_adj = np.array(skill_skill_adj).astype(np.int32)
-    data = np.ones(skill_skill_adj.shape[0]).astype(np.float32)
-    skill_skill_sparse = sparse.coo_matrix((data, (skill_skill_adj[:, 0], skill_skill_adj[:, 1])), shape=(skill_num, skill_num))
-    sparse.save_npz(os.path.join(data_folder, 'skill_skill_sparse.npz'), skill_skill_sparse)
+    if len(skill_skill_adj) == 0:
+        return sparse.coo_matrix((skill_num, skill_num), dtype=np.float32)
+
+    skill_skill_adj = np.array(list(set(skill_skill_adj)), dtype=np.int32)
+    data = np.ones(skill_skill_adj.shape[0], dtype=np.float32)
+    return sparse.coo_matrix((data, (skill_skill_adj[:, 0], skill_skill_adj[:, 1])), shape=(skill_num, skill_num))
 
 
-extract_pro_pro_sim()
-extract_skill_skill_sim()
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--data-dir', required=True)
+    args = parser.parse_args()
+
+    pro_skill_path = os.path.join(args.data_dir, 'pro_skill_sparse.npz')
+    pro_skill_coo = sparse.load_npz(pro_skill_path)
+    pro_num, skill_num = pro_skill_coo.shape
+    print(f'problem number {pro_num}, skill number {skill_num}')
+
+    pro_pro = extract_pro_pro_sim(pro_skill_coo)
+    skill_skill = extract_skill_skill_sim(pro_skill_coo)
+
+    sparse.save_npz(os.path.join(args.data_dir, 'pro_pro_sparse.npz'), pro_pro)
+    sparse.save_npz(os.path.join(args.data_dir, 'skill_skill_sparse.npz'), skill_skill)
+    print('Saved pro_pro_sparse.npz and skill_skill_sparse.npz')
+
+
+if __name__ == '__main__':
+    main()
