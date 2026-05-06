@@ -21,6 +21,8 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
 
 def split_skill_text(skill_text: str) -> List[str]:
     value = str(skill_text).strip()
@@ -185,8 +187,8 @@ def save_ques_skill_mapping(ques_skill_map: pd.DataFrame, output_dir: str = "dat
 
 
 def main() -> None:
-    csv_path = "./Statics2011/AllData_student_step_2011F.csv"
-    output_dir = "data/STATICS2011"
+    csv_path = os.path.join(SCRIPT_DIR, "Statics2011", "AllData_student_step_2011F.csv")
+    output_dir = os.path.join(SCRIPT_DIR, "data", "STATICS2011")
 
     if not os.path.exists(csv_path):
         print(f"Error: input file not found: {csv_path}")
@@ -210,3 +212,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

@@ -4,6 +4,8 @@ import csv
 import os
 from collections import defaultdict
 
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
 
 def _parse_int(token):
     token = token.strip()
@@ -62,7 +64,7 @@ def read_xes3g5m_csv(csv_path):
     return users
 
 
-# ✅ 只用 train 构建
+# �?只用 train 构建
 def build_maps(train_users):
     all_q = set()
     all_c = set()
@@ -77,7 +79,7 @@ def build_maps(train_users):
     qid_map = {q: i for i, q in enumerate(sorted(all_q))}
     cid_map = {c: i for i, c in enumerate(sorted(all_c))}
 
-    # 单 skill 映射（DiffuQKT需要）
+    # �?skill 映射（DiffuQKT需要）
     q2c_final = {}
     for q, c_counts in q2c_counts.items():
         best_c = sorted(c_counts.items(), key=lambda x: (-x[1], x[0]))[0][0]
@@ -99,7 +101,7 @@ def write_ques_skill_csv(out_path, qid_map, cid_map, q2c_final):
 
 
 def write_ques_skill_files(out_ques, out_skill, users, qid_map, cid_map):
-    # ✅ UNK ID
+    # �?UNK ID
     UNK_Q = len(qid_map)
     UNK_C = len(cid_map)
 
@@ -135,9 +137,9 @@ def write_ques_skill_files(out_ques, out_skill, users, qid_map, cid_map):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--train-csv', default='./XES3G5M/train.csv')
-    parser.add_argument('--test-csv', default='./XES3G5M/test.csv')
-    parser.add_argument('--out-dir', default='./data/XES3G5M')
+    parser.add_argument('--train-csv', default=os.path.join(SCRIPT_DIR, 'XES3G5M', 'train.csv'))
+    parser.add_argument('--test-csv', default=os.path.join(SCRIPT_DIR, 'XES3G5M', 'test.csv'))
+    parser.add_argument('--out-dir', default=os.path.join(SCRIPT_DIR, 'data', 'XES3G5M'))
     args = parser.parse_args()
 
     os.makedirs(args.out_dir, exist_ok=True)
@@ -150,7 +152,7 @@ def main():
 
     print(f"Train users: {len(train_users)}, Test users: {len(test_users)}")
 
-    # ✅ 只用 train 构图
+    # �?只用 train 构图
     qid_map, cid_map, q2c_final = build_maps(train_users)
 
     print(f"Train-only mapped questions: {len(qid_map)}, concepts: {len(cid_map)}")
