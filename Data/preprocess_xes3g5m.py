@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 import argparse
 import csv
 import os
@@ -64,14 +66,13 @@ def read_xes3g5m_csv(csv_path):
     return users
 
 
-# �?只用 train 构建
 def build_maps(train_users):
     all_q = set()
     all_c = set()
     q2c_counts = defaultdict(lambda: defaultdict(int))
 
     for questions, concepts, responses in train_users.values():
-        for q, c, r in zip(questions, concepts, responses):
+        for q, c, _ in zip(questions, concepts, responses):
             all_q.add(q)
             all_c.add(c)
             q2c_counts[q][c] += 1
@@ -79,7 +80,7 @@ def build_maps(train_users):
     qid_map = {q: i for i, q in enumerate(sorted(all_q))}
     cid_map = {c: i for i, c in enumerate(sorted(all_c))}
 
-    # �?skill 映射（DiffuQKT需要）
+    # Keep one concept per question (most frequent in train set).
     q2c_final = {}
     for q, c_counts in q2c_counts.items():
         best_c = sorted(c_counts.items(), key=lambda x: (-x[1], x[0]))[0][0]
@@ -101,24 +102,20 @@ def write_ques_skill_csv(out_path, qid_map, cid_map, q2c_final):
 
 
 def write_ques_skill_files(out_ques, out_skill, users, qid_map, cid_map):
-    # �?UNK ID
-    UNK_Q = len(qid_map)
-    UNK_C = len(cid_map)
+    unk_q = len(qid_map)
+    unk_c = len(cid_map)
 
     def sort_key(item):
         uid = item[0]
         return int(uid) if uid.isdigit() else uid
 
-    with open(out_ques, 'w', encoding='utf-8') as fq, \
-         open(out_skill, 'w', encoding='utf-8') as fs:
-
+    with open(out_ques, 'w', encoding='utf-8') as fq, open(out_skill, 'w', encoding='utf-8') as fs:
         for uid, (questions, concepts, responses) in sorted(users.items(), key=sort_key):
             mapped_q, mapped_c, mapped_r = [], [], []
 
             for q, c, r in zip(questions, concepts, responses):
-                mq = qid_map.get(q, UNK_Q)
-                mc = cid_map.get(c, UNK_C)
-
+                mq = qid_map.get(q, unk_q)
+                mc = cid_map.get(c, unk_c)
                 mapped_q.append(str(mq))
                 mapped_c.append(str(mc))
                 mapped_r.append(str(r))
@@ -152,9 +149,7 @@ def main():
 
     print(f"Train users: {len(train_users)}, Test users: {len(test_users)}")
 
-    # �?只用 train 构图
     qid_map, cid_map, q2c_final = build_maps(train_users)
-
     print(f"Train-only mapped questions: {len(qid_map)}, concepts: {len(cid_map)}")
 
     write_ques_skill_files(
