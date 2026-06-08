@@ -1,6 +1,7 @@
 import argparse
 import math
 import os
+import time
 
 import numpy as np
 import torch
@@ -114,8 +115,11 @@ def main():
 
     all_pro_ids = np.arange(pro_num, dtype=np.int64)
     for epoch in range(args.resume_epoch, args.epochs):
+        epoch_start_time = time.time()
+
         model.train()
         train_loss = 0.0
+        train_start_time = time.time()
 
         np.random.shuffle(all_pro_ids)
         for m in range(train_steps):
@@ -162,13 +166,16 @@ def main():
             train_loss += loss.item()
 
         train_loss /= max(1, train_steps)
-        print(f'epoch {epoch}, loss {train_loss:.4f}')
+        train_time = time.time() - train_start_time
+
+        print(f'epoch {epoch}, loss {train_loss:.4f}, train_time {train_time:.2f}s')
 
         if epoch + 1 in [50, 100, 200, 500, 1000, 1500, 2000] or (epoch + 1) == args.epochs:
             torch.save(model.state_dict(), os.path.join(saved_model_folder, f'pebg_{epoch + 1}.pt'))
 
     print('finish training')
 
+    eval_start_time = time.time()
     model.eval()
     with torch.no_grad():
         pro_repre = model.pro_embedding.weight.detach().cpu().numpy()
@@ -186,6 +193,9 @@ def main():
 
         pro_final_repre, _ = model.pnn_forward([all_pro_embed, all_skill_embed, all_diff_embed])
         pro_final_repre = pro_final_repre.detach().cpu().numpy()
+
+    eval_time = time.time() - eval_start_time
+    print(f'evaluation time {eval_time:.2f}s')
 
     skill_id_dict = load_skill_id_dict(os.path.join(args.data_dir, 'skill_id_dict.txt'), skill_num)
     join_skill_num = len(skill_id_dict)
