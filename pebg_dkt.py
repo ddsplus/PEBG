@@ -1,6 +1,7 @@
 import argparse
 import math
 import os
+import time
 
 import numpy as np
 import torch
@@ -110,8 +111,11 @@ def main():
             f.write('epoch,train_loss,test_auc,test_acc,is_best\n')
 
     for epoch in tqdm(range(args.epochs)):
+        epoch_start_time = time.time()
+
         model.train()
         train_loss = 0.0
+        train_start_time = time.time()
 
         for j in range(train_steps):
             b, e = j * args.batch_size, (j + 1) * args.batch_size
@@ -131,8 +135,10 @@ def main():
             train_loss += loss.item()
 
         train_loss /= max(1, train_steps)
+        train_time = time.time() - train_start_time
 
         model.eval()
+        test_start_time = time.time()
         test_preds, test_targets = [], []
         with torch.no_grad():
             for j in range(test_steps):
@@ -149,8 +155,10 @@ def main():
                 test_preds.append(preds_.cpu().numpy())
                 test_targets.append(targets_.cpu().numpy())
 
+        test_time = time.time() - test_start_time
+
         if len(test_preds) == 0:
-            print(f'Epoch {epoch + 1}/{args.epochs}, train loss:{train_loss:.5f}, no valid test samples.')
+            print(f'Epoch {epoch + 1}/{args.epochs}, train loss:{train_loss:.5f}, train_time {train_time:.2f}s, test_time {test_time:.2f}s, no valid test samples.')
             with open(metric_log_path, 'a', encoding='utf-8') as f:
                 f.write(f'{epoch + 1},{train_loss:.6f},nan,nan,0\n')
             continue
@@ -180,7 +188,7 @@ def main():
             )
             is_best = 1
 
-        print(f'Epoch {epoch + 1}/{args.epochs}, train loss:{train_loss:.5f}, test auc:{test_auc:.6f}, test acc:{test_acc:.5f}')
+        print(f'Epoch {epoch + 1}/{args.epochs}, train loss:{train_loss:.5f}, train_time {train_time:.2f}s, test_time {test_time:.2f}s, test auc:{test_auc:.6f}, test acc:{test_acc:.5f}')
         with open(metric_log_path, 'a', encoding='utf-8') as f:
             f.write(f'{epoch + 1},{train_loss:.6f},{test_auc:.6f},{test_acc:.6f},{is_best}\n')
 
